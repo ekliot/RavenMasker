@@ -12,6 +12,28 @@ require "chunky_png"
 class Masker
 
   Grid = Struct.new( :cell_size, :grid_size, keyword_init: true ) do
+    def cell_len()
+      cell_size[:w] * cell_size[:h]
+    end
+
+    def grid_len()
+      grid_size[:w] * grid_size[:h]
+    end
+
+    def get_px( grid, cell )
+      raise ArgumentError, 'grid idx out of range' if grid >= grid_len()
+      raise ArgumentError, 'cell idx out of range' if cell >= cell_len()
+
+      g_row = grid / grid_size[:w]
+      g_col = grid - g_row * grid_size[:h]
+
+      c_row = cell / cell_size[:w]
+      c_col = cell - c_row * cell_size[:h]
+
+      # return a 0-indexed (x, y) co-ord
+      { x: g_col * cell_size[:w] + c_col,
+        y: g_row * cell_size[:h] + c_row }
+    end
   end
 
   # ================ #
@@ -29,7 +51,7 @@ class Masker
   end
 
   def get_grid()
-    p self.class.get_grid @img, @msg
+    self.class.get_grid @img, @msg
   end
 
   # ============= #
@@ -41,24 +63,19 @@ class Masker
     h = img.height
     l = msg.length
 
-    p "img // [ #{w}, #{h} ] px"
-    p "msg // #{l} chars"
-
     # these are automatically Ints, as integer division in Ruby does not cast values as floats
     cell_w = w / l
     cell_h = h / l
 
     raise ArgumentError, 'message too long for image' if cell_w < 1 || cell_h < 1
 
+    # these are also Ints like above
     grid_w = w / cell_w
     grid_h = h / cell_h
 
-    p "cells // [ #{cell_w}, #{cell_h} ] px"
-    p "grid // [ #{grid_w}, #{grid_h} ] cells"
-
-    return Grid.new(
-      cell_size: [ cell_w, cell_h ],
-      grid_size: [ grid_w, grid_h ]
+    Grid.new(
+      cell_size: { w: cell_w, h: cell_h },
+      grid_size: { w: grid_w, h: grid_h }
     )
   end
 
@@ -66,17 +83,20 @@ class Masker
     return ChunkyPNG::Image.from_file( fname )
   end
 
-  def self.compare_pngs( a, b )
-    return if a.width != b.width || a.height != b.height
+  def self.same_pngs?( a, b )
+    return false if a.width != b.width || a.height != b.height
 
     for r in 0...a.width
       for c in 0...a.height
-        p "nope" if a[r,c] != b[r,c]
+        return false if a[r,c] != b[r,c]
       end
     end
+
+    true
   end
 end
 
 img = Masker.open_png( 'sword01.png' )
 m = Masker.new img, 'do you want to live forever?'
-m.get_grid()
+g = m.get_grid()
+p g
