@@ -9,3 +9,6 @@ test_tweet = r.get_tweet 986986637887463424
 test_img = test_tweet.media[0]
 
 p r.pull_img_from_url( test_img.media_url_https, 'test.png' )
+
+test_tweet = r.get_tweet 988435209870823430
+p test_tweet.hashtags

@@ -21,8 +21,12 @@ class Raven
   # TWITTER HANDLING #
   # ================ #
 
-  def get_tweet( id )
-    @client.status 986986637887463424
+  def get_tweet( id, mode='extended' )
+    @client.status id, tweet_mode: mode
+  end
+
+  def get_tags( id )
+    get_tweet( id ).hashtags
   end
 
   # retrieves an image from a given media URL
