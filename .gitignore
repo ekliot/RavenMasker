@@ -1,1 +1,4 @@
 auth.json
+Gemfile.lock
+*png
+testing/*json
