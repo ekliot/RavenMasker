@@ -14,3 +14,6 @@ gem "chunky_png", "~> 1.3"
 
 # Added at 2018-04-19 14:26:41 -0400 by ekliot:
 gem "json", "~> 2.1"
+
+# Added at 2018-04-28 16:59:29 -0400 by ekliot:
+gem "minitest", "~> 5.11"
