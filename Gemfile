@@ -17,3 +17,6 @@ gem "json", "~> 2.1"
 
 # Added at 2018-04-28 16:59:29 -0400 by ekliot:
 gem "minitest", "~> 5.11"
+
+# Added at 2018-04-29 12:39:38 -0400 by ekliot:
+gem "thor", "~> 0.20.0"

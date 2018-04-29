@@ -9,11 +9,13 @@
 
 require "json"
 require "open-uri"
-require "optparse"
 require "twitter"
 
 class Raven
+  attr_accessor :client
   def initialize( auth )
+    raise StandardError, 'need user consumer key to access Twitter'    if auth['consumer_key'].nil?
+    raise StandardError, 'need user consumer secret to access Twitter' if auth['consumer_secret'].nil?
     @client = Twitter::REST::Client.new auth
   end
 
@@ -38,6 +40,11 @@ class Raven
       # using 'open-uri' to pull data from url into output
       out << open( url.normalize.to_s ).read
     end
+  end
+
+  def send_tweet( msg, img, hashtags )
+    raise StandardError, 'need user access token to send tweets'        if @client.access_token.nil?
+    raise StandardError, 'need user access token secret to send tweets' if @client.access_token_secret.nil?
   end
 
   # ========== #
