@@ -89,6 +89,9 @@ class TestMasker < Minitest::Test
   def test_that_empty_tags_are_invalid
   end
 
+  def test_that_non_are_invalid
+  end
+
   def test_that_grid_params_are_accurate
   end
 

@@ -7,7 +7,7 @@
 # those messages from encrypted PNGs
 # === === === === === === === === === === === === === === === === === === === #
 
-require "chunky_png"
+require 'chunky_png'
 
 class Masker
 
@@ -42,6 +42,8 @@ class Masker
     end
   end
 
+  HASHTAG_REGEX = /^[a-zA-Z_]\w*$/
+
   # ============ #
   # CORE METHODS #
   # ============ #
@@ -55,7 +57,7 @@ class Masker
 
       # TODO validate img
       # TODO validate message
-      self.validate_tags( tags )
+      self.tags_valid?( tags )
 
       rng = Masker.gen_rng tags
       grid = Masker.gen_grid img, tags
@@ -231,7 +233,7 @@ class Masker
   #   - this product is then divided by the average ASCII value of all hashtags
   #   - this is then multiplied by the number of hashtags
   def self.gen_seed( tags )
-    self.validate_tags tags
+    self.tags_valid? tags
 
     seed = 1
     buffer = 1
@@ -270,7 +272,7 @@ class Masker
   #   - the length of tags
   #   - ascii codes of chars in tags
   def self.get_grid_param( tags )
-    self.validate_tags tags
+    self.tags_valid? tags
 
     sum = 0
     count = 0
@@ -285,17 +287,49 @@ class Masker
     sum / count
   end
 
-  # --- Masker.validate_tags( tags )
-  # validates an Array of strings to make sure they are Twitter-acceptable
-  #   - each hashtag must be alphanumeric (with underscores) and cannot
+  # ========== #
+  # VALIDATORS #
+  # ========== #
+
+  # --- Masker.tags_valid?( tags )
+  # validates an Array of Strings to make sure they are Twitter-acceptable
+  #   - each hashtag must be alphanumeric (including underscores) and cannot
   #     start with a number
   #   - the combined length of all hashtags cannot exeeed
   #     280-(tags.length*2)+1 (max length of a tweet, #'s and spaces
   #     between each hashtag)
-  def self.validate_tags( tags )
-    # TODO implement validation
-    raise TypeError, 'gimme Array' if !tags.instance_of? Array
-    raise ArgumentError, 'empty tags' if tags.length == 0
+  #   - each hashtag must be ASCII
+  def self.tags_valid?( tags )
+    raise TypeError, 'tags must be an Array' if !tags.is_a? Array
+    raise ArgumentError, 'given tags are empty' if tags.length == 0
+
+    ch_cnt = 0
+    max_len = 281 - (tags.length * 2)
+
+    tags.each do |t|
+      raise TypeError, "tag #{t} must be a String" if !t.is_a? String
+      raise ArgumentError, "tag #{t} must be ASCII characters" if !t.ascii_only?
+      raise ArgumentError, "tag #{t} does not match Twitter hashtag pattern" if !t.match? HASHTAG_REGEX
+      ch_cnt += t.length
+      raise ArgumentError, 'length of tags is too long for Twitter' if ch_cnt > max_len
+    end
+
+    return true
+  end
+
+  # --- Masker.img_valid?( img_name )
+  def self.img_valid?( img_name )
+    raise TypeError, 'image filename must be a String' if !img_name.is_a? String
+    raise ArgumentError, 'image filename must be a PNG' if !img_name.end_with? '.png'
+    raise ArgumentError, 'could not find image' if !File.exist? img_name
+    return true
+  end
+
+  # --- Masker.img_valid?( img )
+  def self.msg_valid?( msg )
+    raise TypeError, "message #{msg} must be a String" if !msg.is_a? String
+    raise ArgumentError, "message #{msg} must be ASCII characters" if !msg.ascii_only?
+    return true
   end
 
   # =========== #
