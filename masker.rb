@@ -11,10 +11,8 @@ require 'chunky_png'
 
 class Masker
 
-  # TODO document
   Coord = Struct.new( :x, :y, keyword_init: true )
 
-  # TODO document
   Grid = Struct.new( :cell_size, :grid_size, keyword_init: true ) do
     def cell_len()
       cell_size[:w] * cell_size[:h]
@@ -48,16 +46,16 @@ class Masker
   # CORE METHODS #
   # ============ #
 
-  # --- Masker.mask( img_name, msg, tags )
+  # --- Masker.mask( img_name, msg, tags, output )
   # TODO document
-  def self.mask( img_name, msg, tags )
+  def self.mask( img_name, msg, tags, output )
     pid = fork do
       orig = self.open_png img_name
       img = ChunkyPNG::Image.from_canvas orig
 
-      # TODO validate img
-      # TODO validate message
-      self.tags_valid?( tags )
+      self.msg_valid? msg
+      self.img_valid? img
+      self.tags_valid? tags
 
       rng = Masker.gen_rng tags
       grid = Masker.gen_grid img, tags
@@ -74,10 +72,7 @@ class Masker
         set_px << px
       end
 
-      new_name = img_name.chomp( '.png' )
-      new_name << '_masked.png'
-
-      img.save new_name
+      img.save output
     end
 
     Process.wait pid
@@ -138,7 +133,7 @@ class Masker
   # --- Masker.gen_grid( img, tags )
   # TODO document
   def self.gen_grid( img, tags )
-    raise TypeError, 'gimme ChunkyPNG::Image' if !img.instance_of? ChunkyPNG::Image
+    raise TypeError, 'Need ChunkyPNG::Image to generate grid' if !img.instance_of? ChunkyPNG::Image
 
     w = img.width
     h = img.height
@@ -151,7 +146,7 @@ class Masker
     cell_w = w / g_val
     cell_h = h / g_val
 
-    raise ArgumentError, 'image too small for hash tags' if cell_w < 1 || cell_h < 1
+    raise ArgumentError, 'Provided image too small for hash tags' if cell_w < 1 || cell_h < 1
 
     # how many cells are in our grid?
     grid_w = w / cell_w
@@ -166,8 +161,8 @@ class Masker
   # --- Masker.next_px( grid, rng )
   # TODO document
   def self.next_px( grid, rng )
-    raise TypeError, 'gimme Grid' if !grid.instance_of? Masker::Grid
-    raise TypeError, 'gimme Random' if !rng.instance_of? Random
+    raise TypeError, 'A Grid instance was not provided' if !grid.instance_of? Masker::Grid
+    raise TypeError, 'A Random instance was not provided' if !rng.instance_of? Random
 
     g_max = grid.grid_len()
     c_max = grid.cell_len()
@@ -307,9 +302,9 @@ class Masker
     max_len = 281 - (tags.length * 2)
 
     tags.each do |t|
-      raise TypeError, "tag #{t} must be a String" if !t.is_a? String
-      raise ArgumentError, "tag #{t} must be ASCII characters" if !t.ascii_only?
-      raise ArgumentError, "tag #{t} does not match Twitter hashtag pattern" if !t.match? HASHTAG_REGEX
+      raise TypeError, "tag '#{t}' must be a String" if !t.is_a? String
+      raise ArgumentError, "tag '#{t}' must be ASCII characters" if !t.ascii_only?
+      raise ArgumentError, "tag '#{t}' does not match Twitter hashtag pattern" if !t.match? HASHTAG_REGEX
       ch_cnt += t.length
       raise ArgumentError, 'length of tags is too long for Twitter' if ch_cnt > max_len
     end
@@ -317,15 +312,29 @@ class Masker
     return true
   end
 
-  # --- Masker.img_valid?( img_name )
-  def self.img_valid?( img_name )
+  # --- Masker.img_valid?( img )
+  def self.img_valid?( img )
+    raise TypeError, 'image must be a ChunkyPNG::Image' if !img.is_a? ChunkyPNG::Image
+
+    img.width.times do |c|
+      img.height.times do |r|
+        col = ChunkyPNG::Color.a img[c,r]
+        raise ArgumentError, "image already has transparency" if col < 255
+      end
+    end
+
+    return true
+  end
+
+  # --- Masker.img_file_valid?( img_name )
+  def self.img_file_valid?( img_name )
     raise TypeError, 'image filename must be a String' if !img_name.is_a? String
     raise ArgumentError, 'image filename must be a PNG' if !img_name.end_with? '.png'
     raise ArgumentError, 'could not find image' if !File.exist? img_name
     return true
   end
 
-  # --- Masker.img_valid?( img )
+  # --- Masker.img_file_valid?( img )
   def self.msg_valid?( msg )
     raise TypeError, "message #{msg} must be a String" if !msg.is_a? String
     raise ArgumentError, "message #{msg} must be ASCII characters" if !msg.ascii_only?
@@ -345,9 +354,9 @@ class Masker
   def self.same_pngs?( a, b )
     return false if a.width != b.width || a.height != b.height
 
-    for r in 0...a.width
-      for c in 0...a.height
-        return false if a[r,c] != b[r,c]
+    a.width.times do |c|
+      a.height.times do |r|
+        return false if a[c,r] != b[c,r]
       end
     end
 

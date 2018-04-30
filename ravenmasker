@@ -1,0 +1,155 @@
+#!/usr/bin/env ruby
+
+# === === === === === === === === === === === === === === === === === === === #
+# filename: ravenmasker
+# === === === === === === === === === === === === === === === === === === === #
+
+require 'thor'
+require_relative 'masker'
+require_relative 'raven'
+
+class RavenMasker < Thor
+  # override implemented from https://stackoverflow.com/a/45730659/5103831
+  # this is to make sure the ordering of commands is true to the ordering here
+  class << self
+    def help(shell, subcommand = false)
+      list = printable_commands(true, subcommand)
+      Thor::Util.thor_classes_in(self).each do |klass|
+        list += klass.printable_commands(false)
+      end
+
+      # Remove this line to disable alphabetical sorting
+      # list.sort! { |a, b| a[0] <=> b[0] }
+
+      # Add this line to remove the help-command itself from the output
+      list.reject! {|l| l[0].split[1] == 'help'}
+
+      if defined?(@package_name) && @package_name
+        shell.say "#{@package_name} commands:"
+      else
+        shell.say "Commands:"
+      end
+
+      shell.print_table(list, :indent => 2, :truncate => false)
+      shell.say
+      class_options_help(shell)
+
+      # Add this line if you want to print custom text at the end of your help output.
+      # (similar to how Rails does it)
+      shell.say "Run `#{self.basename} help <command>` for a more detailed description"
+    end
+  end
+
+  desc 'mask <img> <msg> <tags>', 'encrypt <msg> into <img> using <tags>'
+  option :output, :aliases => '-o'
+  long_desc <<-LONGDESC
+    `ravenmasker mask` will encrypt a message <msg> into a given image <img>, utilizing a provided set of tags, suitable for Twitter hashtags
+
+    e.g. ravenmasker mask image.png 'hello world' foo,bar,ravenmasker2018
+
+    It is recommended that the image be at least 128x128px to work, however the encryption is more effective for larger messages. Additionally, the image must not have any pre-existing transparency. Lastly, this will not work in the unlikely case the payload has more characters than the image has pixels, but it is recommended the payload length be no more than 1% of the image pixel count.
+
+    Tags must be provided as a comma-separated list. Valid tags have only letters, numbers, and underscores, and cannot start with a number.
+
+    An output file may be optionally provided with `--output FILENAME` or `-o FILENAME`, otherwise the default output image will be `<img>_masked.png`
+  LONGDESC
+  def mask( img_name, msg, tags )
+    begin
+      Masker.img_file_valid? img_name
+    rescue => err
+      @shell.say "Provided image file, #{img_name}, is not valid..."
+      @shell.say "\t#{err.message}"
+      return
+    end
+
+    begin
+      Masker.msg_valid? msg
+    rescue => err
+      @shell.say "Provided message, #{msg}, is not valid..."
+      @shell.say "\t#{err.message}"
+      return
+    end
+
+    tag_arr = tags.split ','
+
+    begin
+      Masker.tags_valid? tag_arr
+    rescue => err
+      @shell.say "Provided tags, #{tag_arr}, are not valid..."
+      @shell.say "\t#{err.message}"
+      return
+    end
+
+    if options[:output]
+      output = options[:output]
+    else
+      output = img_name.chomp( '.png' ) + '_masked.png'
+    end
+
+    begin
+      Masker.mask( img_name, msg, tag_arr, output )
+    rescue ArgumentError => err
+      @shell.say "Error during masking process..."
+      @shell.say "\t#{err.message}"
+    end
+
+    puts "'#{msg}' was encrypted into #{output} using the tags #{tags.split ','}"
+  end
+
+  desc 'unmask <img> <tags>', 'decrypt a message from <img> using <tags>'
+  long_desc <<-LONGDESC
+    `ravenmasker unmask` will decrypt a message from <img>, using the given <tags> as a cipher.
+
+    e.g. ravenmasker unmask mask masked_image.png foo,bar,ravenmasker2018
+
+    Tags must be provided as a comma-separated list. Valid tags have only letters, numbers, and underscores, and cannot start with a number.
+
+    If a message is not found (either the cipher was incorrect, or the image was not encrypted to begin with), an error will be printed. Otherwise, the decrypted message will be the only output.
+  LONGDESC
+  def unmask( img_name, tags )
+    begin
+      Masker.img_file_valid? img_name
+    rescue => err
+      @shell.say "Provided image file, #{img_name}, is not valid..."
+      @shell.say "\t#{err.message}"
+      return
+    end
+
+    tag_arr = tags.split ','
+
+    begin
+      Masker.tags_valid? tag_arr
+    rescue => err
+      @shell.say "Provided tags, #{tag_arr}, are not valid..."
+      @shell.say "\t#{err.message}"
+      return
+    end
+
+    begin
+      msg = Masker.unmask( img_name, tag_arr )
+    rescue ArgumentError => err
+      @shell.say "Error during masking process..."
+      @shell.say "\t#{err.message}"
+    end
+
+    if msg.length == 0
+      msg = "ERROR // A message could not be decrypted from #{img_name}."
+    end
+
+    puts "#{msg}"
+  end
+
+  desc 'pull <status>', 'read <status> tweet and check for an encrypted message'
+  def pull()
+    @auth = JSON.parse( File.read( __dir__ + '/auth.json' ) )
+  end
+
+  desc 'send <img> <msg> <tweet> <tags> <auth>', 'tweet <tweet> with <msg> encrypted into <img> using <tags> from <auth> user'
+  def send()
+    @auth = JSON.parse( File.read( __dir__ + '/auth.json' ) )
+  end
+
+end
+
+
+RavenMasker.start( ARGV )
