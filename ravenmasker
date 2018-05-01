@@ -40,6 +40,8 @@ class RavenMasker < Thor
     end
   end
 
+  AUTH_FILE = __dir__ + '/auth.json'
+
   desc 'mask <img> <msg> <tags>', 'encrypt <msg> into <img> using <tags>'
   option :output, :aliases => '-o'
   long_desc <<-LONGDESC
@@ -55,27 +57,27 @@ class RavenMasker < Thor
   LONGDESC
   def mask( img_name, msg, tags )
     begin
-      Masker.img_file_valid? img_name
+      Masker.img_file_valid?( img_name )
     rescue => err
-      @shell.say "Provided image file, #{img_name}, is not valid..."
+      @shell.say "\tERROR // Provided image file, #{img_name}, is not valid..."
       @shell.say "\t#{err.message}"
       return
     end
 
     begin
-      Masker.msg_valid? msg
+      Masker.msg_valid?( msg )
     rescue => err
-      @shell.say "Provided message, #{msg}, is not valid..."
+      @shell.say "\tERROR // Provided message, #{msg}, is not valid..."
       @shell.say "\t#{err.message}"
       return
     end
 
-    tag_arr = tags.split ','
+    tag_arr = tags.split( ',' )
 
     begin
-      Masker.tags_valid? tag_arr
+      Masker.tags_valid?( tag_arr )
     rescue => err
-      @shell.say "Provided tags, #{tag_arr}, are not valid..."
+      @shell.say "\tERROR // Provided tags, #{tag_arr}, are not valid..."
       @shell.say "\t#{err.message}"
       return
     end
@@ -89,11 +91,13 @@ class RavenMasker < Thor
     begin
       Masker.mask( img_name, msg, tag_arr, output )
     rescue ArgumentError => err
-      @shell.say "Error during masking process..."
+      @shell.say "\tERROR // Masking process..."
       @shell.say "\t#{err.message}"
     end
 
-    puts "'#{msg}' was encrypted into #{output} using the tags #{tags.split ','}"
+    puts "\t'#{msg}' was encrypted into #{output} using the tags #{tags.split ','}"
+
+    output
   end
 
   desc 'unmask <img> <tags>', 'decrypt a message from <img> using <tags>'
@@ -108,19 +112,26 @@ class RavenMasker < Thor
   LONGDESC
   def unmask( img_name, tags )
     begin
-      Masker.img_file_valid? img_name
+      Masker.img_file_valid?( img_name )
     rescue => err
-      @shell.say "Provided image file, #{img_name}, is not valid..."
+      @shell.say "\tERROR // Provided image file, #{img_name}, is not valid..."
       @shell.say "\t#{err.message}"
       return
     end
 
-    tag_arr = tags.split ','
+    if tags.is_a? String
+      tag_arr = tags.split( ',' )
+    elsif tags.is_a? Array
+      tag_arr = tags
+    else
+      @shell.say "\tERROR // Provided invalid Type for tags: #{tags.class}"
+      return
+    end
 
     begin
-      Masker.tags_valid? tag_arr
+      Masker.tags_valid?( tag_arr )
     rescue => err
-      @shell.say "Provided tags, #{tag_arr}, are not valid..."
+      @shell.say "\tERROR // Provided tags, #{tag_arr}, are not valid..."
       @shell.say "\t#{err.message}"
       return
     end
@@ -128,25 +139,71 @@ class RavenMasker < Thor
     begin
       msg = Masker.unmask( img_name, tag_arr )
     rescue ArgumentError => err
-      @shell.say "Error during masking process..."
+      @shell.say "\tERROR // unmasking failed..."
       @shell.say "\t#{err.message}"
+      return
     end
 
     if msg.length == 0
-      msg = "ERROR // A message could not be decrypted from #{img_name}."
+      msg = "\tERROR // A message could not be decrypted from #{img_name}."
     end
 
-    puts "#{msg}"
+    @shell.say "\t#{msg}"
   end
 
   desc 'pull <status>', 'read <status> tweet and check for an encrypted message'
-  def pull()
-    @auth = JSON.parse( File.read( __dir__ + '/auth.json' ) )
+  long_desc <<-LONGDESC
+  LONGDESC
+  def pull( status, output=nil )
+    if !File.exist? AUTH_FILE
+      @shell.say "\tERROR // Could not find auth file at " + AUTH_FILE
+    end
+
+    auth = JSON.parse( File.read( AUTH_FILE ) )
+    raven = Raven.new( auth )
+
+    tweet = raven.get_tweet( status )
+
+    @shell.say raven.tweet_to_s( tweet )
+    @shell.say # newline
+
+    if !raven.valid_tweet?( tweet )
+      @shell.say "\tERROR // Provided tweet does not have an attached PNG"
+      return
+    end
+
+    img_name = raven.pull_img_from_tweet( tweet, output )
+    tags = raven.get_tags_as_strs( tweet )
+
+    unmask( img_name, tags )
   end
 
-  desc 'send <img> <msg> <tweet> <tags> <auth>', 'tweet <tweet> with <msg> encrypted into <img> using <tags> from <auth> user'
-  def send()
-    @auth = JSON.parse( File.read( __dir__ + '/auth.json' ) )
+  desc 'send <img> <msg> <tweet> <tags>', 'tweet <tweet> with <msg> encrypted into <img> using <tags>'
+  long_desc <<-LONGDESC
+  LONGDESC
+  def send( img_name, msg, tweet, tags )
+    if !File.exist? AUTH_FILE
+      @shell.say "\tERROR // Could not find auth file at " + AUTH_FILE
+    end
+
+    auth = JSON.parse( File.read( __dir__ + '/auth.json' ) )
+
+    raven = Raven.new( auth )
+    tweet = raven.add_tags_to_msg( tweet, tags )
+
+    @shell.say "Encypting..."
+    masked = mask( img_name, msg, tags )
+
+    @shell.say #newline
+    @shell.say """Tweeting:
+    Message:      #{tweet}
+    Source Image: #{img_name}"""
+
+    begin
+      raven.send_tweet tweet, masked
+    rescue Twitter::Error::Unauthorized => err
+      @shell.say "\t#{err.msg}"
+    end
   end
 
 end
