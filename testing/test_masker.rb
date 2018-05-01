@@ -32,7 +32,7 @@ class TestMasker < Minitest::Test
       end
     end
 
-    assert_equal test_arr.length, test_arr.uniq.length
+    assert_equal test_arr.uniq.length, test_arr.length
   end
 
   #
